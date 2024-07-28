@@ -68,7 +68,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 	// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
 	// which are the error causes for json.Marshal
 	payload, _ := json.Marshal(activeMountInfo)
-	err = os.WriteFile(activemountFilePath, payload, 0o666)
+	err = os.WriteFile(activemountFilePath, payload, 0o644)
 	if err != nil {
 		log.Errorf("Active mount file %s cannot be written.", activemountFilePath)
 		return false, fmt.Errorf("active mount file %s cannot be written", activemountFilePath)
@@ -135,7 +135,7 @@ func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemou
 		// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
 		// which are the error causes for json.Marshal
 		payload, _ := json.Marshal(activeMountInfo)
-		err = os.WriteFile(activemountFilePath, payload, 0o666)
+		err = os.WriteFile(activemountFilePath, payload, 0o644)
 		if err != nil {
 			log.Errorf("The active mount file %s could not be updated", activemountFilePath)
 			return false, fmt.Errorf("the active mount file %s could not be updated", activemountFilePath)
