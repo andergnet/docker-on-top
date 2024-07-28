@@ -31,7 +31,6 @@ type activeMount struct {
 //	mount: Returns true if the request requires the filesystem to be mounted, false if not.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
 func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
-	var activeMountInfo activeMount
 	var result bool
 
 	_, readDirErr := activemountsdir.ReadDir(1) // Check if there are any files inside activemounts dir
@@ -46,6 +45,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
+	var activeMountInfo activeMount
 	activemountFilePath := d.activemountsdir(request.Name) + request.ID
 	file, err := os.Open(activemountFilePath)
 
