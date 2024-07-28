@@ -28,18 +28,18 @@ type activeMount struct {
 //
 // Return:
 //
-//	mount: Returns true if the request requires the filesystem to be mounted, false if not.
+//	doMountFs: Returns true if the request requires the filesystem to be mounted, false if not.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
 func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
-	var result bool
+	var doMountFs bool
 
 	_, readDirErr := activemountsdir.ReadDir(1) // Check if there are any files inside activemounts dir
 	if readDirErr == nil {
 		// There is something no need to mount the filesystem again
-		result = false
+		doMountFs = false
 	} else if errors.Is(readDirErr, io.EOF) {
 		// The directory is empty, mount the filesystem
-		result = true
+		doMountFs = true
 	} else {
 		log.Errorf("Failed to list the activemounts directory: %v", readDirErr)
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
@@ -74,7 +74,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 		return false, fmt.Errorf("active mount file %s cannot be written", activemountFilePath)
 	}
 
-	return result, nil
+	return doMountFs, nil
 }
 
 // deactivateVolume checks if the volume that has been requested to be unmounted (as in docker volume unmounting)
@@ -89,7 +89,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 //
 // Return:
 //
-//	unmount: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
+//	doUnmountFs: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
 func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
 
