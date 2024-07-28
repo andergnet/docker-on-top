@@ -14,7 +14,23 @@ type activeMount struct {
 	UsageCount int
 }
 
-func (d *DockerOnTop) Activate(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
+// activateVolume checks if the volume that has been requested to be mounted (as in docker volume mounting)
+// actually requires to be mounted (as an overlay fs mount). For that purpose check if other containers
+// have already mounted the volume (by reading in `activemountsdir`). It is also possible that the volume
+// has already been been mounted by the same container (when doing a `docker cp` while the container is running),
+// in that case the file named with the `request.ID` will contain the number of times the container has
+// been requested the volume to be mounted. That number will be increased each time `activateVolume` is
+// called and decreased on `deactivateVolume`.
+// Parameters:
+//
+//	request: Incoming Docker mount request.
+//	activemountsdir: Folder where Docker-On-Top mounts are tracked.
+//
+// Return:
+//
+//	mount: Returns true if the request requires the filesystem to be mounted, false if not.
+//	err: If the function encountered an error, the error itself, nil if everything went right.
+func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
 	var activeMountInfo activeMount
 	var result bool
 
@@ -58,7 +74,21 @@ func (d *DockerOnTop) Activate(request *volume.MountRequest, activemountsdir loc
 	return result, nil
 }
 
-func (d *DockerOnTop) Deactivate(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
+// deactivateVolume checks if the volume that has been requested to be unmounted (as in docker volume unmounting)
+// actually requires to be unmounted (as an overlay fs unmount). It will check the number of times the container
+// has been requested to mount the volume in the file named `request.ID` and decrease the number, when the number
+// reaches zero it will delete the `request.ID` file since this container no longer mounts the volume. It will
+// also check if other containers are mounting this volume by checking for other files in the active mounts folder.
+// Parameters:
+//
+//	request: Incoming Docker unmount request.
+//	activemountsdir: Folder where Docker-On-Top mounts are tracked.
+//
+// Return:
+//
+//	unmount: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
+//	err: If the function encountered an error, the error itself, nil if everything went right.
+func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
 
 	dirEntries, readDirErr := activemountsdir.ReadDir(2) // Check if there is any _other_ container using the volume
 	if errors.Is(readDirErr, io.EOF) {
