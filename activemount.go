@@ -64,6 +64,9 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 
 	activeMountInfo.UsageCount++
 
+	// Convert activeMountInfo to JSON to store it in a file. We can safely ignore Marshal errors, since the
+	// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
+	// which are the error causes for json.Marshal
 	payload, _ := json.Marshal(activeMountInfo)
 	err = os.WriteFile(activemountFilePath, payload, 0o666)
 	if err != nil {
@@ -128,6 +131,9 @@ func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemou
 		}
 		return !otherVolumesPresent, nil
 	} else {
+		// Convert activeMountInfo to JSON to store it in a file. We can safely ignore Marshal errors, since the
+		// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
+		// which are the error causes for json.Marshal
 		payload, _ := json.Marshal(activeMountInfo)
 		err = os.WriteFile(activemountFilePath, payload, 0o666)
 		if err != nil {
