@@ -10,12 +10,12 @@ import (
 	"github.com/docker/go-plugins-helpers/volume"
 )
 
-type ActiveMount struct {
+type activeMount struct {
 	UsageCount int
 }
 
 func (d *DockerOnTop) Activate(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
-	var activeMount ActiveMount
+	var activeMountInfo activeMount
 	var result bool
 
 	_, readDirErr := activemountsdir.ReadDir(1) // Check if there are any files inside activemounts dir
@@ -36,19 +36,19 @@ func (d *DockerOnTop) Activate(request *volume.MountRequest, activemountsdir loc
 	if err == nil {
 		// The file can exist from a previous mount when doing a docker cp on an already mounted container, no need to mount the filesystem again
 		payload, _ := io.ReadAll(file)
-		json.Unmarshal(payload, &activeMount)
+		json.Unmarshal(payload, &activeMountInfo)
 		file.Close()
 	} else if os.IsNotExist(err) {
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
-		activeMount = ActiveMount{UsageCount: 0}
+		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
 		log.Errorf("Active mount file %s exists but cannot be read.", activemountFilePath)
 		return false, fmt.Errorf("active mount file %s exists but cannot be read", activemountFilePath)
 	}
 
-	activeMount.UsageCount++
+	activeMountInfo.UsageCount++
 
-	payload, _ := json.Marshal(activeMount)
+	payload, _ := json.Marshal(activeMountInfo)
 	err = os.WriteFile(activemountFilePath, payload, 0o666)
 	if err != nil {
 		log.Errorf("Active mount file %s cannot be written.", activemountFilePath)
@@ -70,7 +70,7 @@ func (d *DockerOnTop) Deactivate(request *volume.UnmountRequest, activemountsdir
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
-	var activeMount ActiveMount
+	var activeMountInfo activeMount
 	activemountFilePath := d.activemountsdir(request.Name) + request.ID
 
 	otherVolumesPresent := len(dirEntries) > 1 || dirEntries[0].Name() != request.ID
@@ -79,7 +79,7 @@ func (d *DockerOnTop) Deactivate(request *volume.UnmountRequest, activemountsdir
 
 	if err == nil {
 		payload, _ := io.ReadAll(file)
-		json.Unmarshal(payload, &activeMount)
+		json.Unmarshal(payload, &activeMountInfo)
 		file.Close()
 	} else if os.IsNotExist(err) {
 		log.Errorf("The active mount file %s was expected but is not there", activemountFilePath)
@@ -89,9 +89,9 @@ func (d *DockerOnTop) Deactivate(request *volume.UnmountRequest, activemountsdir
 		return false, fmt.Errorf("the active mount file %s could not be opened", activemountFilePath)
 	}
 
-	activeMount.UsageCount--
+	activeMountInfo.UsageCount--
 
-	if activeMount.UsageCount == 0 {
+	if activeMountInfo.UsageCount == 0 {
 		err := os.Remove(activemountFilePath)
 		if err != nil {
 			log.Errorf("The active mount file %s could not be deleted", activemountFilePath)
@@ -99,7 +99,7 @@ func (d *DockerOnTop) Deactivate(request *volume.UnmountRequest, activemountsdir
 		}
 		return !otherVolumesPresent, nil
 	} else {
-		payload, _ := json.Marshal(activeMount)
+		payload, _ := json.Marshal(activeMountInfo)
 		err = os.WriteFile(activemountFilePath, payload, 0o666)
 		if err != nil {
 			log.Errorf("The active mount file %s could not be updated", activemountFilePath)
