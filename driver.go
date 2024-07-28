@@ -233,7 +233,7 @@ func (d *DockerOnTop) Unmount(request *volume.UnmountRequest) error {
 	}
 	defer activemountsdir.Close() // There's nothing I could do about the error if it occurs
 
-	doUnmountFs, err := d.DeactivateVolume(request, activemountsdir)
+	doUnmountFs, err := d.deactivateVolume(request, activemountsdir)
 	if err != nil {
 		return internalError("failed to deactivate the active mount:", err)
 	} else if doUnmountFs {

@@ -91,7 +91,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 //
 //	doUnmountFs: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
-func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
+func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
 
 	dirEntries, readDirErr := activemountsdir.ReadDir(2) // Check if there is any _other_ container using the volume
 	if errors.Is(readDirErr, io.EOF) {
