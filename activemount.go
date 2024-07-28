@@ -100,11 +100,10 @@ func (d *DockerOnTop) DeactivateVolume(request *volume.UnmountRequest, activemou
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
-	var activeMountInfo activeMount
-	activemountFilePath := d.activemountsdir(request.Name) + request.ID
-
 	otherVolumesPresent := len(dirEntries) > 1 || dirEntries[0].Name() != request.ID
+	var activeMountInfo activeMount
 
+	activemountFilePath := d.activemountsdir(request.Name) + request.ID
 	file, err := os.Open(activemountFilePath)
 
 	if err == nil {
