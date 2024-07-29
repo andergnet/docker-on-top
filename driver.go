@@ -248,7 +248,7 @@ func (d *DockerOnTop) Unmount(request *volume.UnmountRequest) error {
 
 		log.Debugf("Unmounted volume %s", request.Name)
 	} else {
-		log.Debugf("Volume %s is still mounted. Indicating success without unmounting", request.Name)
+		log.Debugf("Volume %s is still mounted in some other container. Indicating success without unmounting", request.Name)
 	}
 
 	// Report an error during cleanup, if any
