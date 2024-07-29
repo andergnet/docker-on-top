@@ -41,7 +41,6 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 		// The directory is empty, mount the filesystem
 		doMountFs = true
 	} else {
-		log.Errorf("Failed to list the activemounts directory: %v", readDirErr)
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
@@ -58,7 +57,6 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
 		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
-		log.Errorf("Active mount file %s exists but cannot be read.", activemountFilePath)
 		return false, fmt.Errorf("active mount file %s exists but cannot be read", activemountFilePath)
 	}
 
@@ -70,7 +68,6 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 	payload, _ := json.Marshal(activeMountInfo)
 	err = os.WriteFile(activemountFilePath, payload, 0o644)
 	if err != nil {
-		log.Errorf("Active mount file %s cannot be written.", activemountFilePath)
 		return false, fmt.Errorf("active mount file %s cannot be written", activemountFilePath)
 	}
 
@@ -96,10 +93,8 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 	dirEntries, readDirErr := activemountsdir.ReadDir(2) // Check if there is any _other_ container using the volume
 	if errors.Is(readDirErr, io.EOF) {
 		// If directory is empty, unmount overlay and clean up
-		log.Errorf("There are no active mount files and one was expected. Unmounting.")
 		return true, fmt.Errorf("there are no active mount files and one was expected. Unmounting")
 	} else if readDirErr != nil {
-		log.Errorf("Failed to list the activemounts directory: %v", readDirErr)
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
@@ -114,10 +109,8 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 		json.Unmarshal(payload, &activeMountInfo)
 		file.Close()
 	} else if os.IsNotExist(err) {
-		log.Errorf("The active mount file %s was expected but is not there", activemountFilePath)
 		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there", activemountFilePath)
 	} else {
-		log.Errorf("The active mount file %s could not be opened", activemountFilePath)
 		return false, fmt.Errorf("the active mount file %s could not be opened", activemountFilePath)
 	}
 
@@ -126,7 +119,6 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 	if activeMountInfo.UsageCount == 0 {
 		err := os.Remove(activemountFilePath)
 		if err != nil {
-			log.Errorf("The active mount file %s could not be deleted", activemountFilePath)
 			return false, fmt.Errorf("the active mount file %s could not be deleted", activemountFilePath)
 		}
 		return !otherVolumesPresent, nil
@@ -137,7 +129,6 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 		payload, _ := json.Marshal(activeMountInfo)
 		err = os.WriteFile(activemountFilePath, payload, 0o644)
 		if err != nil {
-			log.Errorf("The active mount file %s could not be updated", activemountFilePath)
 			return false, fmt.Errorf("the active mount file %s could not be updated", activemountFilePath)
 		}
 		return false, nil

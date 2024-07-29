@@ -185,6 +185,7 @@ func (d *DockerOnTop) Mount(request *volume.MountRequest) (*volume.MountResponse
 
 	doMountFs, err := d.activateVolume(request, activemountsdir)
 	if err != nil {
+		log.Errorf("Error while activating the filesystem mount: %w", err)
 		return nil, internalError("failed to activate the active mount:", err)
 	} else if doMountFs {
 		lowerdir := thisVol.BaseDirPath
@@ -235,6 +236,7 @@ func (d *DockerOnTop) Unmount(request *volume.UnmountRequest) error {
 
 	doUnmountFs, err := d.deactivateVolume(request, activemountsdir)
 	if err != nil {
+		log.Errorf("Error while activating the filesystem mount: %w", err)
 		return internalError("failed to deactivate the active mount:", err)
 	} else if doUnmountFs {
 		err = syscall.Unmount(d.mountpointdir(request.Name), 0)
