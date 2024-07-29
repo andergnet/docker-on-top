@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/docker/go-plugins-helpers/volume"
 )
 
 type activeMount struct {
@@ -18,19 +16,20 @@ type activeMount struct {
 // actually requires to be mounted (as an overlay fs mount). For that purpose check if other containers
 // have already mounted the volume (by reading in `activemountsdir`). It is also possible that the volume
 // has already been been mounted by the same container (when doing a `docker cp` while the container is running),
-// in that case the file named with the `request.ID` will contain the number of times the container has
+// in that case the file named with the `requestId` will contain the number of times the container has
 // been requested the volume to be mounted. That number will be increased each time `activateVolume` is
 // called and decreased on `deactivateVolume`.
 // Parameters:
 //
-//	request: Incoming Docker mount request.
+//	requestName: Name of the volume to be mounted
+//	requestID: ID of the container requesting the mount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
 //
 //	doMountFs: Returns true if the request requires the filesystem to be mounted, false if not.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
-func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsdir lockedFile) (bool, error) {
+func (d *DockerOnTop) activateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
 	var doMountFs bool
 
 	_, readDirErr := activemountsdir.ReadDir(1) // Check if there are any files inside activemounts dir
@@ -45,7 +44,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 	}
 
 	var activeMountInfo activeMount
-	activemountFilePath := d.activemountsdir(request.Name) + request.ID
+	activemountFilePath := d.activemountsdir(requestName) + requestId
 	file, err := os.Open(activemountFilePath)
 
 	if err == nil {
@@ -84,19 +83,20 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 
 // deactivateVolume checks if the volume that has been requested to be unmounted (as in docker volume unmounting)
 // actually requires to be unmounted (as an overlay fs unmount). It will check the number of times the container
-// has been requested to mount the volume in the file named `request.ID` and decrease the number, when the number
-// reaches zero it will delete the `request.ID` file since this container no longer mounts the volume. It will
+// has been requested to mount the volume in the file named `requestId` and decrease the number, when the number
+// reaches zero it will delete the `requestId` file since this container no longer mounts the volume. It will
 // also check if other containers are mounting this volume by checking for other files in the active mounts folder.
 // Parameters:
 //
-//	request: Incoming Docker unmount request.
+//	requestName: Name of the volume to be unmounted
+//	requestID: ID of the container requesting the unmount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
 //
 //	doUnmountFs: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
-func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemountsdir lockedFile) (bool, error) {
+func (d *DockerOnTop) deactivateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
 
 	dirEntries, readDirErr := activemountsdir.ReadDir(2) // Check if there is any _other_ container using the volume
 	if errors.Is(readDirErr, io.EOF) {
@@ -106,10 +106,10 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
 	}
 
-	otherVolumesPresent := len(dirEntries) > 1 || dirEntries[0].Name() != request.ID
+	otherVolumesPresent := len(dirEntries) > 1 || dirEntries[0].Name() != requestId
 	var activeMountInfo activeMount
 
-	activemountFilePath := d.activemountsdir(request.Name) + request.ID
+	activemountFilePath := d.activemountsdir(requestName) + requestId
 	file, err := os.Open(activemountFilePath)
 
 	if err == nil {

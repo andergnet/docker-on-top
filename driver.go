@@ -183,7 +183,7 @@ func (d *DockerOnTop) Mount(request *volume.MountRequest) (*volume.MountResponse
 	}
 	defer activemountsdir.Close() // There is nothing I could do about the error (logging is performed inside `Close()` anyway)
 
-	doMountFs, err := d.activateVolume(request, activemountsdir)
+	doMountFs, err := d.activateVolume(request.Name, request.ID, activemountsdir)
 	if err != nil {
 		log.Errorf("Error while activating the filesystem mount: %w", err)
 		return nil, internalError("failed to activate the active mount:", err)
@@ -234,7 +234,7 @@ func (d *DockerOnTop) Unmount(request *volume.UnmountRequest) error {
 	}
 	defer activemountsdir.Close() // There's nothing I could do about the error if it occurs
 
-	doUnmountFs, err := d.deactivateVolume(request, activemountsdir)
+	doUnmountFs, err := d.deactivateVolume(request.Name, request.ID, activemountsdir)
 	if err != nil {
 		log.Errorf("Error while activating the filesystem mount: %w", err)
 		return internalError("failed to deactivate the active mount:", err)
