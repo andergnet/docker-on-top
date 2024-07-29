@@ -50,14 +50,22 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 
 	if err == nil {
 		// The file can exist from a previous mount when doing a docker cp on an already mounted container, no need to mount the filesystem again
-		payload, _ := io.ReadAll(file)
-		json.Unmarshal(payload, &activeMountInfo)
-		file.Close()
+		payload, readErr := io.ReadAll(file)
+		closeErr := file.Close()
+		if readErr != nil {
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be read %w", activemountFilePath, readErr)
+		} else if closeErr != nil {
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed %w", activemountFilePath, readErr)
+		}
+		unmarshalErr := json.Unmarshal(payload, &activeMountInfo)
+		if unmarshalErr != nil {
+			return false, fmt.Errorf("active mount file %s contents are invalid %w", activemountFilePath, unmarshalErr)
+		}
 	} else if os.IsNotExist(err) {
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
 		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
-		return false, fmt.Errorf("active mount file %s exists but cannot be read %w", activemountFilePath, err)
+		return false, fmt.Errorf("active mount file %s exists but cannot be opened %w", activemountFilePath, err)
 	}
 
 	activeMountInfo.UsageCount++
@@ -105,9 +113,17 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 	file, err := os.Open(activemountFilePath)
 
 	if err == nil {
-		payload, _ := io.ReadAll(file)
-		json.Unmarshal(payload, &activeMountInfo)
-		file.Close()
+		payload, readErr := io.ReadAll(file)
+		closeErr := file.Close()
+		if readErr != nil {
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be read %w", activemountFilePath, readErr)
+		} else if closeErr != nil {
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed %w", activemountFilePath, readErr)
+		}
+		unmarshalErr := json.Unmarshal(payload, &activeMountInfo)
+		if unmarshalErr != nil {
+			return false, fmt.Errorf("active mount file %s contents are invalid %w", activemountFilePath, unmarshalErr)
+		}
 	} else if os.IsNotExist(err) {
 		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there %w", activemountFilePath, err)
 	} else {
