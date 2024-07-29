@@ -57,7 +57,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
 		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
-		return false, fmt.Errorf("active mount file %s exists but cannot be read", activemountFilePath)
+		return false, fmt.Errorf("active mount file %s exists but cannot be read %w", activemountFilePath, err)
 	}
 
 	activeMountInfo.UsageCount++
@@ -68,7 +68,7 @@ func (d *DockerOnTop) activateVolume(request *volume.MountRequest, activemountsd
 	payload, _ := json.Marshal(activeMountInfo)
 	err = os.WriteFile(activemountFilePath, payload, 0o644)
 	if err != nil {
-		return false, fmt.Errorf("active mount file %s cannot be written", activemountFilePath)
+		return false, fmt.Errorf("active mount file %s cannot be written %w", activemountFilePath, err)
 	}
 
 	return doMountFs, nil
@@ -109,9 +109,9 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 		json.Unmarshal(payload, &activeMountInfo)
 		file.Close()
 	} else if os.IsNotExist(err) {
-		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there", activemountFilePath)
+		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there %w", activemountFilePath, err)
 	} else {
-		return false, fmt.Errorf("the active mount file %s could not be opened", activemountFilePath)
+		return false, fmt.Errorf("the active mount file %s could not be opened %w", activemountFilePath, err)
 	}
 
 	activeMountInfo.UsageCount--
@@ -119,7 +119,7 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 	if activeMountInfo.UsageCount == 0 {
 		err := os.Remove(activemountFilePath)
 		if err != nil {
-			return false, fmt.Errorf("the active mount file %s could not be deleted", activemountFilePath)
+			return false, fmt.Errorf("the active mount file %s could not be deleted %w", activemountFilePath, err)
 		}
 		return !otherVolumesPresent, nil
 	} else {
@@ -129,7 +129,7 @@ func (d *DockerOnTop) deactivateVolume(request *volume.UnmountRequest, activemou
 		payload, _ := json.Marshal(activeMountInfo)
 		err = os.WriteFile(activemountFilePath, payload, 0o644)
 		if err != nil {
-			return false, fmt.Errorf("the active mount file %s could not be updated", activemountFilePath)
+			return false, fmt.Errorf("the active mount file %s could not be updated %w", activemountFilePath, err)
 		}
 		return false, nil
 	}
