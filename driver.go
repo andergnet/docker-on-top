@@ -201,14 +201,25 @@ func (d *DockerOnTop) Mount(request *volume.MountRequest) (*volume.MountResponse
 		options := "lowerdir=" + lowerdir + ",upperdir=" + upperdir + ",workdir=" + workdir
 
 		err = syscall.Mount("docker-on-top_"+request.Name, mountpoint, "overlay", 0, options)
-		if os.IsNotExist(err) {
-			log.Errorf("Failed to mount overlay for volume %s because something does not exist: %v",
-				request.Name, err)
-			return nil, errors.New("failed to mount volume: something is missing (does the base directory " +
-				"exist?)")
-		} else if err != nil {
-			log.Errorf("Failed to mount overlay for volume %s: %v", request.Name, err)
-			return nil, internalError("failed to mount overlay", err)
+		if err != nil {
+			// The filesystem could not be mounted so undo the activateVolume call so it does not appear as if
+			// we are using a volume that we couln't mount. We can ignore the doUnmountFs because we know the volume
+			// is not mounted.
+			_, deactivateErr := d.deactivateVolume(request.Name, request.ID, activemountsdir)
+			if deactivateErr != nil {
+				log.Errorf("Additional error while deactivating the filesystem mount: %w", err)
+				// Do not return the error since we are dealing with a more important one
+			}
+
+			if os.IsNotExist(err) {
+				log.Errorf("Failed to mount overlay for volume %s because something does not exist: %v",
+					request.Name, err)
+				return nil, errors.New("failed to mount volume: something is missing (does the base directory " +
+					"exist?)")
+			} else {
+				log.Errorf("Failed to mount overlay for volume %s: %v", request.Name, err)
+				return nil, internalError("failed to mount overlay", err)
+			}
 		}
 		log.Debugf("Mounted volume %s at %s", request.Name, mountpoint)
 	} else {
