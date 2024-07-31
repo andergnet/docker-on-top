@@ -19,14 +19,13 @@ type activeMount struct {
 // in that case the file named with the `requestId` will contain the number of times the container has
 // been requested the volume to be mounted. That number will be increased each time `activateVolume` is
 // called and decreased on `deactivateVolume`.
-// Parameters:
 //
+// Parameters:
 //	requestName: Name of the volume to be mounted
 //	requestID: ID of the container requesting the mount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
-//
 //	doMountFs: Returns true if the request requires the filesystem to be mounted, false if not.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
 func (d *DockerOnTop) activateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
@@ -52,25 +51,25 @@ func (d *DockerOnTop) activateVolume(requestName string, requestId string, activ
 		payload, readErr := io.ReadAll(file)
 		closeErr := file.Close()
 		if readErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be read %w", activemountFilePath, readErr)
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be read: %w", activemountFilePath, readErr)
 		} else if closeErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed %w", activemountFilePath, readErr)
+			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed: %w", activemountFilePath, readErr)
 		}
 		unmarshalErr := json.Unmarshal(payload, &activeMountInfo)
 		if unmarshalErr != nil {
-			return false, fmt.Errorf("active mount file %s contents are invalid %w", activemountFilePath, unmarshalErr)
+			return false, fmt.Errorf("active mount file %s contents are invalid: %w", activemountFilePath, unmarshalErr)
 		}
 	} else if os.IsNotExist(err) {
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
 		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
-		return false, fmt.Errorf("active mount file %s exists but cannot be opened %w", activemountFilePath, err)
+		return false, fmt.Errorf("active mount file %s exists but cannot be opened: %w", activemountFilePath, err)
 	}
 
 	activeMountInfo.UsageCount++
 
 	// Convert activeMountInfo to JSON to store it in a file. We can safely ignore Marshal errors, since the
-	// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
+	// activeMount structure is simple enought not to contain "strange" floats, unsupported datatypes or cycles,
 	// which are the error causes for json.Marshal
 	payload, _ := json.Marshal(activeMountInfo)
 	err = os.WriteFile(activemountFilePath, payload, 0o644)
@@ -86,14 +85,13 @@ func (d *DockerOnTop) activateVolume(requestName string, requestId string, activ
 // has been requested to mount the volume in the file named `requestId` and decrease the number, when the number
 // reaches zero it will delete the `requestId` file since this container no longer mounts the volume. It will
 // also check if other containers are mounting this volume by checking for other files in the active mounts folder.
-// Parameters:
 //
+// Parameters:
 //	requestName: Name of the volume to be unmounted
 //	requestID: ID of the container requesting the unmount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
-//
 //	doUnmountFs: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
 //	err: If the function encountered an error, the error itself, nil if everything went right.
 func (d *DockerOnTop) deactivateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
