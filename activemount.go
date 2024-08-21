@@ -21,13 +21,16 @@ type activeMount struct {
 // called and decreased on `deactivateVolume`.
 //
 // Parameters:
+//
 //	requestName: Name of the volume to be mounted
-//	requestID: ID of the container requesting the mount
+//	requestID: Unique ID for the volume-container pair requesting the mount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
-//	doMountFs: Returns true if the request requires the filesystem to be mounted, false if not.
-//	err: If the function encountered an error, the error itself, nil if everything went right.
+//
+//	doMountFs: `true` if the caller should mount the filesystem, `false` otherwise.
+//		If an error is returned, `doMountFs` is always `false`.
+//	err: An error, if encountered, `nil` otherwise.
 func (d *DockerOnTop) activateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
 	var doMountFs bool
 
@@ -39,31 +42,25 @@ func (d *DockerOnTop) activateVolume(requestName string, requestId string, activ
 		// The directory is empty, mount the filesystem
 		doMountFs = true
 	} else {
-		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
+		return false, fmt.Errorf("failed to list activemounts/ : %w", readDirErr)
 	}
 
 	var activeMountInfo activeMount
 	activemountFilePath := d.activemountsdir(requestName) + requestId
-	file, err := os.Open(activemountFilePath)
 
-	if err == nil {
+	payload, readErr := os.ReadFile(activemountFilePath)
+
+	if readErr == nil {
 		// The file can exist from a previous mount when doing a docker cp on an already mounted container, no need to mount the filesystem again
-		payload, readErr := io.ReadAll(file)
-		closeErr := file.Close()
-		if readErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be read: %w", activemountFilePath, readErr)
-		} else if closeErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed: %w", activemountFilePath, readErr)
-		}
 		unmarshalErr := json.Unmarshal(payload, &activeMountInfo)
 		if unmarshalErr != nil {
 			return false, fmt.Errorf("active mount file %s contents are invalid: %w", activemountFilePath, unmarshalErr)
 		}
-	} else if os.IsNotExist(err) {
+	} else if os.IsNotExist(readErr) {
 		// Default case, we need to create a new active mount, the filesystem needs to be mounted
 		activeMountInfo = activeMount{UsageCount: 0}
 	} else {
-		return false, fmt.Errorf("active mount file %s exists but cannot be opened: %w", activemountFilePath, err)
+		return false, fmt.Errorf("active mount file %s exists but cannot be read: %w", activemountFilePath, readErr)
 	}
 
 	activeMountInfo.UsageCount++
@@ -71,10 +68,10 @@ func (d *DockerOnTop) activateVolume(requestName string, requestId string, activ
 	// Convert activeMountInfo to JSON to store it in a file. We can safely ignore Marshal errors, since the
 	// activeMount structure is simple enought not to contain "strange" floats, unsupported datatypes or cycles,
 	// which are the error causes for json.Marshal
-	payload, _ := json.Marshal(activeMountInfo)
-	err = os.WriteFile(activemountFilePath, payload, 0o644)
-	if err != nil {
-		return false, fmt.Errorf("active mount file %s cannot be written %w", activemountFilePath, err)
+	payload, _ = json.Marshal(activeMountInfo)
+	writeErr := os.WriteFile(activemountFilePath, payload, 0o644)
+	if writeErr != nil {
+		return false, fmt.Errorf("active mount file %s cannot be written %w", activemountFilePath, writeErr)
 	}
 
 	return doMountFs, nil
@@ -87,45 +84,43 @@ func (d *DockerOnTop) activateVolume(requestName string, requestId string, activ
 // also check if other containers are mounting this volume by checking for other files in the active mounts folder.
 //
 // Parameters:
+//
 //	requestName: Name of the volume to be unmounted
-//	requestID: ID of the container requesting the unmount
+//	requestID: Unique ID for the volume-container pair requesting the mount
 //	activemountsdir: Folder where Docker-On-Top mounts are tracked.
 //
 // Return:
-//	doUnmountFs: Returns true if there are not other usages of this volume and the filesystem can be unmounted.
-//	err: If the function encountered an error, the error itself, nil if everything went right.
+//
+//	doUnmountFs: `true` if there are no other usages of this volume and the filesystem should be unmounted
+//		by the caller. If an error is returned, `doMountFs` is always `false`.
+//	err: An error, if encountered, `nil` otherwise.
 func (d *DockerOnTop) deactivateVolume(requestName string, requestId string, activemountsdir lockedFile) (bool, error) {
 
 	dirEntries, readDirErr := activemountsdir.ReadDir(2) // Check if there is any _other_ container using the volume
 	if errors.Is(readDirErr, io.EOF) {
 		// If directory is empty, unmount overlay and clean up
-		return true, fmt.Errorf("there are no active mount files and one was expected. Unmounting")
+		log.Warning("there are no active mount files and one was expected. the filesystem will be unmounted")
+		return true, nil
 	} else if readDirErr != nil {
-		return false, fmt.Errorf("failed to list activemounts/ %v", readDirErr)
+		return false, fmt.Errorf("failed to list activemounts/ %w", readDirErr)
 	}
 
 	otherVolumesPresent := len(dirEntries) > 1 || dirEntries[0].Name() != requestId
+
 	var activeMountInfo activeMount
-
 	activemountFilePath := d.activemountsdir(requestName) + requestId
-	file, err := os.Open(activemountFilePath)
 
-	if err == nil {
-		payload, readErr := io.ReadAll(file)
-		closeErr := file.Close()
-		if readErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be read %w, the filesystem won't be unmounted", activemountFilePath, readErr)
-		} else if closeErr != nil {
-			return false, fmt.Errorf("active mount file %s has been opened but cannot be closed %w, the filesystem won't be unmounted", activemountFilePath, readErr)
-		}
+	payload, readErr := os.ReadFile(activemountFilePath)
+
+	if readErr == nil {
 		unmarshalErr := json.Unmarshal(payload, &activeMountInfo)
 		if unmarshalErr != nil {
 			return false, fmt.Errorf("active mount file %s contents are invalid %w, the filesystem won't be unmounted", activemountFilePath, unmarshalErr)
 		}
-	} else if os.IsNotExist(err) {
-		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there %w, the filesystem won't be unmounted", activemountFilePath, err)
+	} else if os.IsNotExist(readErr) {
+		return !otherVolumesPresent, fmt.Errorf("the active mount file %s was expected but is not there %w, the filesystem won't be unmounted", activemountFilePath, readErr)
 	} else {
-		return false, fmt.Errorf("the active mount file %s could not be opened %w, the filesystem won't be unmounted", activemountFilePath, err)
+		return false, fmt.Errorf("the active mount file %s could not be opened %w, the filesystem won't be unmounted", activemountFilePath, readErr)
 	}
 
 	activeMountInfo.UsageCount--
@@ -141,9 +136,9 @@ func (d *DockerOnTop) deactivateVolume(requestName string, requestId string, act
 		// activeMount structure is simple enought not to contain "strage" floats, unsupported datatypes or cycles
 		// which are the error causes for json.Marshal
 		payload, _ := json.Marshal(activeMountInfo)
-		err = os.WriteFile(activemountFilePath, payload, 0o644)
-		if err != nil {
-			return false, fmt.Errorf("the active mount file %s could not be updated %w, the filesystem won't be unmounted", activemountFilePath, err)
+		writeErr := os.WriteFile(activemountFilePath, payload, 0o644)
+		if writeErr != nil {
+			return false, fmt.Errorf("the active mount file %s could not be updated %w, the filesystem won't be unmounted", activemountFilePath, writeErr)
 		}
 		return false, nil
 	}
